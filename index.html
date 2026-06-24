@@ -3,922 +3,397 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manager Pontaj Personal</title>
-    
-    <!-- Tailwind CSS pentru stilizare modernă -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React și Babel rulat direct în browser (fără importuri ES6) -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- SDK-urile Firebase Compat (fără module/importuri, folosesc globalul `firebase`) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
-    <!-- FontAwesome pentru iconițe moderne -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    <title>Manager Pontaj Profesional</title>
+    <!-- Tailwind CSS pentru design modern -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
 
-    <div id="root"></div>
-
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
-
-        function App() {
-            // State-uri principale
-            const [shifts, setShifts] = useState([]);
-            const [activeCheckIn, setActiveCheckIn] = useState(null);
-            const [currentTime, setCurrentTime] = useState(new Date());
-            const [notification, setNotification] = useState(null);
-            const [isLoading, setIsLoading] = useState(true);
-
-            // Cloud Firebase State
-            const [firebaseConfig, setFirebaseConfig] = useState(null);
-            const [syncId, setSyncId] = useState('');
-            const [isCloudConnected, setIsCloudConnected] = useState(false);
-            const [showCloudModal, setShowCloudModal] = useState(false);
-            const [showSyncInput, setShowSyncInput] = useState(false);
-            const [tempSyncInput, setTempSyncInput] = useState('');
-            const [tempConfigJson, setTempConfigJson] = useState('');
-
-            // State-uri formulare
-            const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
-            const [manualCheckIn, setManualCheckIn] = useState('09:00');
-            const [manualCheckOut, setManualCheckOut] = useState('17:00');
-            const [manualNotes, setManualNotes] = useState('');
-            const [editingShift, setEditingShift] = useState(null);
-            const [showCode, setShowCode] = useState(false);
-
-            // Modale de confirmare personalizate (înlocuiesc alert/confirm)
-            const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-            const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-
-            // Referință către baza de date Firestore
-            const dbRef = useRef(null);
-
-            // Ceas în timp real
-            useEffect(() => {
-                const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-                return () => clearInterval(timer);
-            }, []);
-
-            // Afișează mesaje tip Toast personalizate
-            const showToast = (message, type = 'success') => {
-                setNotification({ message, type });
-                setTimeout(() => setNotification(null), 4000);
-            };
-
-            // Încărcare inițială a datelor din LocalStorage sau inițializare Cloud
-            useEffect(() => {
-                const savedConfig = localStorage.getItem('pontaj_firebase_config');
-                const savedSyncId = localStorage.getItem('pontaj_sync_id');
-
-                // Încercăm să încărcăm mai întâi datele locale salvate
-                const localShifts = JSON.parse(localStorage.getItem('pontaj_local_shifts') || '[]');
-                const localActive = JSON.parse(localStorage.getItem('pontaj_local_active') || 'null');
-                
-                // Setăm datele demonstrative dacă utilizatorul este complet nou
-                if (localShifts.length === 0 && !savedConfig) {
-                    const demoData = [
-                        { id: '1', date: new Date(Date.now() - 86400000).toISOString().split('T')[0], checkIn: '09:00', checkOut: '17:30', notes: 'Zi demonstrativă (Salvată local)' },
-                        { id: '2', date: new Date().toISOString().split('T')[0], checkIn: '08:45', checkOut: '17:15', notes: 'Ședință tehnică' }
-                    ];
-                    setShifts(demoData);
-                    localStorage.setItem('pontaj_local_shifts', JSON.stringify(demoData));
-                } else {
-                    setShifts(localShifts);
-                    setActiveCheckIn(localActive);
-                }
-
-                if (savedConfig) {
-                    try {
-                        const parsedConfig = JSON.parse(savedConfig);
-                        setFirebaseConfig(parsedConfig);
-                        
-                        // Inițializează Firebase folosind globalul, fără importuri ES6
-                        if (!firebase.apps.length) {
-                            firebase.initializeApp(parsedConfig);
-                        }
-                        dbRef.current = firebase.firestore();
-                        setIsCloudConnected(true);
-
-                        const currentSyncId = savedSyncId || 'dispozitiv_' + Math.random().toString(36).substring(2, 11);
-                        setSyncId(currentSyncId);
-                        if (!savedSyncId) localStorage.setItem('pontaj_sync_id', currentSyncId);
-
-                        showToast("☁️ Conectat cu succes la baza ta de date Cloud!");
-                    } catch (e) {
-                        console.error("Eroare inițializare Firebase:", e);
-                        showToast("Eroare la încărcarea configurării Cloud!", "error");
-                    }
-                }
-                setIsLoading(false);
-            }, []);
-
-            // Ascultă modificările în timp real din Cloud (dacă este conectat)
-            useEffect(() => {
-                if (!isCloudConnected || !syncId || !dbRef.current) return;
-
-                setIsLoading(true);
-                const docRef = dbRef.current.collection('utilizatori_pontaj').doc(syncId);
-
-                const unsubscribe = docRef.onSnapshot((docSnap) => {
-                    if (docSnap.exists) {
-                        const data = docSnap.data();
-                        if (data.shifts) {
-                            setShifts(data.shifts);
-                            localStorage.setItem('pontaj_local_shifts', JSON.stringify(data.shifts));
-                        }
-                        if (data.activeCheckIn !== undefined) {
-                            setActiveCheckIn(data.activeCheckIn);
-                            localStorage.setItem('pontaj_local_active', JSON.stringify(data.activeCheckIn));
-                        }
-                    } else {
-                        // Prima inițializare în Cloud
-                        docRef.set({
-                            shifts: shifts,
-                            activeCheckIn: activeCheckIn,
-                            lastUpdated: new Date().toISOString()
-                        });
-                    }
-                    setIsLoading(false);
-                }, (error) => {
-                    console.error("Eroare sincronizare:", error);
-                    showToast("Eroare la sincronizarea Cloud!", "error");
-                    setIsLoading(false);
-                });
-
-                return () => unsubscribe();
-            }, [isCloudConnected, syncId]);
-
-            // Salvare date (Local sau Cloud)
-            const saveShiftsData = async (newShifts, newActive) => {
-                setShifts(newShifts);
-                setActiveCheckIn(newActive);
-                localStorage.setItem('pontaj_local_shifts', JSON.stringify(newShifts));
-                localStorage.setItem('pontaj_local_active', JSON.stringify(newActive));
-
-                if (isCloudConnected && dbRef.current && syncId) {
-                    try {
-                        await dbRef.current.collection('utilizatori_pontaj').doc(syncId).set({
-                            shifts: newShifts,
-                            activeCheckIn: newActive,
-                            lastUpdated: new Date().toISOString()
-                        }, { merge: true });
-                    } catch (err) {
-                        console.error("Eroare salvare Cloud:", err);
-                        showToast("Eroare salvare Cloud, salvat doar local!", "error");
-                    }
-                }
-            };
-
-            // Calculează orele dintre intervale
-            const calculateDuration = (start, end) => {
-                if (!start || !end) return 0;
-                const [startH, startM] = start.split(':').map(Number);
-                const [endH, endM] = end.split(':').map(Number);
-                let diffMinutes = (endH * 60 + endM) - (startH * 60 + startM);
-                if (diffMinutes < 0) diffMinutes += 24 * 60;
-                return diffMinutes / 60;
-            };
-
-            const formatDurationText = (hoursDecimal) => {
-                const hours = Math.floor(hoursDecimal);
-                const minutes = Math.round((hoursDecimal - hours) * 60);
-                return `${hours}h ${minutes}m`;
-            };
-
-            // Pontaj Rapid
-            const handleQuickCheckIn = () => {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit', hour12: false });
-                const newActive = {
-                    date: now.toISOString().split('T')[0],
-                    time: timeStr
-                };
-                saveShiftsData(shifts, newActive);
-                showToast("Te-ai pontat de intrare! 🟢");
-            };
-
-            const handleQuickCheckOut = () => {
-                if (!activeCheckIn) return;
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit', hour12: false });
-                
-                const newShift = {
-                    id: Date.now().toString(),
-                    date: activeCheckIn.date,
-                    checkIn: activeCheckIn.time,
-                    checkOut: timeStr,
-                    notes: 'Pontat rapid în timp real'
-                };
-
-                const updatedShifts = [newShift, ...shifts];
-                saveShiftsData(updatedShifts, null);
-                showToast("Te-ai pontat de ieșire! 🔴 Datele au fost salvate.");
-            };
-
-            // Adăugare manuală
-            const handleAddManual = (e) => {
-                e.preventDefault();
-                if (!manualDate || !manualCheckIn || !manualCheckOut) return;
-
-                const newShift = {
-                    id: Date.now().toString(),
-                    date: manualDate,
-                    checkIn: manualCheckIn,
-                    checkOut: manualCheckOut,
-                    notes: manualNotes || 'Adăugat manual'
-                };
-
-                const updatedShifts = [newShift, ...shifts];
-                saveShiftsData(updatedShifts, activeCheckIn);
-                setManualNotes('');
-                showToast("Pontaj adăugat cu succes! 📝");
-            };
-
-            // Ștergere pontaj prin modal personalizat
-            const triggerDeleteShift = (id) => {
-                setConfirmDeleteId(id);
-            };
-
-            const executeDeleteShift = () => {
-                if (confirmDeleteId) {
-                    const updatedShifts = shifts.filter(s => s.id !== confirmDeleteId);
-                    saveShiftsData(updatedShifts, activeCheckIn);
-                    setConfirmDeleteId(null);
-                    showToast("Pontajul a fost șters! 🗑️");
-                }
-            };
-
-            // Editare
-            const startEditing = (shift) => {
-                setEditingShift({ ...shift });
-            };
-
-            const saveEdit = (e) => {
-                e.preventDefault();
-                const updatedShifts = shifts.map(s => s.id === editingShift.id ? editingShift : s);
-                saveShiftsData(updatedShifts, activeCheckIn);
-                setEditingShift(null);
-                showToast("Modificările au fost salvate! ✏️");
-            };
-
-            // Salvare conexiune Firebase customizată
-            const handleSaveFirebaseConfig = (e) => {
-                e.preventDefault();
-                try {
-                    const parsed = JSON.parse(tempConfigJson);
-                    localStorage.setItem('pontaj_firebase_config', JSON.stringify(parsed));
-                    setFirebaseConfig(parsed);
-                    
-                    if (!firebase.apps.length) {
-                        firebase.initializeApp(parsed);
-                    }
-                    dbRef.current = firebase.firestore();
-                    setIsCloudConnected(true);
-                    
-                    const newSyncId = 'dispozitiv_' + Math.random().toString(36).substring(2, 11);
-                    setSyncId(newSyncId);
-                    localStorage.setItem('pontaj_sync_id', newSyncId);
-
-                    setShowCloudModal(false);
-                    showToast("☁️ Cloud configurat cu succes!");
-                } catch (err) {
-                    showToast("JSON-ul introdus este nevalid! Verifică textul copiat.", "error");
-                }
-            };
-
-            // Conectare dispozitiv existent (sincronizare cod)
-            const handleConnectSyncId = (e) => {
-                e.preventDefault();
-                if (!tempSyncInput.trim()) return;
-                const cleanId = tempSyncInput.trim();
-                setSyncId(cleanId);
-                localStorage.setItem('pontaj_sync_id', cleanId);
-                setShowSyncInput(false);
-                setTempSyncInput('');
-                showToast("Sincronizat cu celălalt dispozitiv! 🔄");
-            };
-
-            const copySyncIdToClipboard = () => {
-                const dummy = document.createElement("input");
-                document.body.appendChild(dummy);
-                dummy.value = syncId;
-                dummy.select();
-                document.execCommand("copy");
-                document.body.removeChild(dummy);
-                showToast("Cod copiat în clipboard! 📋");
-            };
-
-            const disconnectCloud = () => {
-                localStorage.removeItem('pontaj_firebase_config');
-                localStorage.removeItem('pontaj_sync_id');
-                setIsCloudConnected(false);
-                setFirebaseConfig(null);
-                setSyncId('');
-                setConfirmDisconnect(false);
-                showToast("Sincronizare Cloud dezactivată.", "error");
-            };
-
-            // Export CSV securizat
-            const exportToCSV = () => {
-                let csvContent = "\ufeff";
-                csvContent += "Data,Ora Intrare,Ora Iesire,Durata (Ore),Observatii\n";
-                
-                shifts.forEach(shift => {
-                    const duration = calculateDuration(shift.checkIn, shift.checkOut).toFixed(2);
-                    csvContent += `"${shift.date}","${shift.checkIn}","${shift.checkOut}","${duration}","${shift.notes.replace(/"/g, '""')}"\n`;
-                });
-
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.setAttribute("href", url);
-                link.setAttribute("download", `pontaj_${new Date().toISOString().split('T')[0]}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-
-            // Statistici generale
-            const totalHours = shifts.reduce((acc, shift) => acc + calculateDuration(shift.checkIn, shift.checkOut), 0);
-            const activeDays = shifts.length;
-            const averageHoursPerDay = activeDays > 0 ? (totalHours / activeDays).toFixed(1) : 0;
-
-            return (
-                <div className="pb-12">
-                    {/* NOTIFICARE TOAST */}
-                    {notification && (
-                        <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl transition-all transform duration-350 border ${
-                            notification.type === 'error' ? 'bg-rose-600 text-white border-rose-500' : 'bg-slate-900 text-white border-slate-800'
-                        }`}>
-                            <span className="text-xl">{notification.type === 'error' ? '⚠️' : '🔔'}</span>
-                            <p className="text-sm font-semibold">{notification.message}</p>
-                        </div>
-                    )}
-
-                    {}
-                    {/* HEADER */}
-                    <header className="bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-850 text-white shadow-xl sticky top-0 z-20">
-                        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-white/10 p-2.5 rounded-2xl border border-white/10">
-                                    <span className="text-3xl">⏱️</span>
-                                </div>
-                                <div>
-                                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-                                        Manager Pontaj
-                                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-                                            isCloudConnected ? 'bg-emerald-500 text-white animate-pulse' : 'bg-amber-500 text-white'
-                                        }`}>
-                                            {isCloudConnected ? 'Cloud Activ' : 'Local'}
-                                        </span>
-                                    </h1>
-                                    <p className="text-xs text-blue-100">Soluție Universală pentru Mobil & PC</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <div className="text-center sm:text-right bg-white/10 px-4 py-2 rounded-2xl border border-white/10 hidden sm:block">
-                                    <div className="text-lg font-bold font-mono tracking-wider">{currentTime.toLocaleTimeString('ro-RO')}</div>
-                                    <div className="text-[10px] text-blue-100 capitalize">{currentTime.toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' })}</div>
-                                </div>
-                                <button
-                                    onClick={() => isCloudConnected ? setConfirmDisconnect(true) : setShowCloudModal(true)}
-                                    className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-sm ${
-                                        isCloudConnected 
-                                            ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30' 
-                                            : 'bg-white text-indigo-700 hover:bg-indigo-50 border border-transparent'
-                                    }`}
-                                >
-                                    <i className={`fa-solid ${isCloudConnected ? 'fa-cloud-slash' : 'fa-cloud'}`}></i>
-                                    {isCloudConnected ? 'Deconectează Cloud' : 'Activează Sincronizare Cloud'}
-                                </button>
-                            </div>
-                        </div>
-                    </header>
-
-                    {/* BANNER INFORMAȚIONAL */}
-                    {!isCloudConnected && (
-                        <div className="bg-amber-500/15 border-b border-amber-500/25 py-2 px-4 text-center">
-                            <p className="text-xs text-amber-800 font-semibold flex items-center justify-center gap-2">
-                                <i className="fa-solid fa-circle-info text-amber-600"></i>
-                                Datele sunt stocate în browserul actual. Activează
-                                <button onClick={() => setShowCloudModal(true)} className="underline text-indigo-700 font-bold ml-1 hover:text-indigo-900">
-                                    Sincronizarea Cloud
-                                </button> pentru a accesa contul simultan de pe telefon și calculator.
-                            </p>
-                        </div>
-                    )}
-
-                    <main className="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        
-                        {/* COLOANA STÂNGA: PANOURI CONTROL */}
-                        <div className="lg:col-span-1 space-y-6">
-
-                            {}
-                            {/* CLOUD SINCRONIZARE AKTIVĂ */}
-                            {isCloudConnected && (
-                                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 text-white p-6 rounded-3xl shadow-xl border border-indigo-950">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
-                                            <i className="fa-solid fa-arrows-rotate animate-spin text-emerald-400"></i> Sincronizare Cloud Activă
-                                        </h3>
-                                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                                            Sincronizat
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-                                        Introdu acest cod unic pe celălalt dispozitiv (telefon sau tabletă) pentru a unifica datele:
-                                    </p>
-
-                                    <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800/60 mb-4">
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-1">Cod Sincronizare Unic</span>
-                                                <span className="font-mono text-sm font-bold tracking-wider text-slate-100">
-                                                    {showCode ? syncId : "•••• •••• •••• ••••"}
-                                                </span>
-                                            </div>
-                                            <div className="flex gap-1.5">
-                                                <button
-                                                    onClick={() => setShowCode(!showCode)}
-                                                    className="p-2 hover:bg-slate-800 text-slate-400 rounded-lg transition"
-                                                >
-                                                    <i className={`fa-solid ${showCode ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                                                </button>
-                                                <button
-                                                    onClick={copySyncIdToClipboard}
-                                                    className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition text-xs font-bold"
-                                                >
-                                                    <i className="fa-solid fa-copy"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {!showSyncInput ? (
-                                        <button
-                                            onClick={() => setShowSyncInput(true)}
-                                            className="w-full bg-white/10 hover:bg-white/15 text-slate-200 text-xs py-2.5 rounded-xl transition border border-white/10 font-bold"
-                                        >
-                                            <i className="fa-solid fa-link mr-1"></i> Conectează alt dispozitiv
-                                        </button>
-                                    ) : (
-                                        <form onSubmit={handleConnectSyncId} className="space-y-3 pt-2 border-t border-slate-800/80">
-                                            <div>
-                                                <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Introdu codul de pe alt ecran</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ex: dispozitiv_..."
-                                                    value={tempSyncInput}
-                                                    onChange={(e) => setTempSyncInput(e.target.value)}
-                                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2 rounded-xl transition">
-                                                    Sincronizează
-                                                </button>
-                                                <button type="button" onClick={() => setShowSyncInput(false)} className="px-3 bg-slate-800 text-slate-300 text-xs py-2 rounded-xl">
-                                                    Anulează
-                                                </button>
-                                            </div>
-                                        </form>
-                                    )}
-                                </div>
-                            )}
-
-                            {}
-                            {/* STATISTICI RAPIDE */}
-                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <i className="fa-solid fa-chart-simple text-blue-500"></i> Statistici Perioadă
-                                </h3>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <div className="bg-blue-50/50 p-3 rounded-2xl text-center border border-blue-500/5">
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase">Ore Lucrate</p>
-                                        <p className="text-sm font-extrabold text-blue-600 mt-1">{formatDurationText(totalHours)}</p>
-                                    </div>
-                                    <div className="bg-indigo-50/50 p-3 rounded-2xl text-center border border-indigo-500/5">
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase">Zile Pontate</p>
-                                        <p className="text-sm font-extrabold text-indigo-600 mt-1">{activeDays}</p>
-                                    </div>
-                                    <div className="bg-purple-50/50 p-3 rounded-2xl text-center border border-purple-500/5">
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase">Medie / Zi</p>
-                                        <p className="text-sm font-extrabold text-purple-600 mt-1">{averageHoursPerDay}h</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {}
-                            {/* PONTAJ RAPID ACUM */}
-                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <i className="fa-solid fa-bolt text-amber-500"></i> Pontaj Rapid în timp real
-                                </h3>
-                                
-                                {!activeCheckIn ? (
-                                    <div className="text-center py-4">
-                                        <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl border border-rose-100">
-                                            <i className="fa-solid fa-circle-pause animate-pulse"></i>
-                                        </div>
-                                        <p className="text-sm text-slate-500 mb-4 font-semibold">Nu ești pontat la muncă în acest moment.</p>
-                                        <button
-                                            onClick={handleQuickCheckIn}
-                                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition duration-150 shadow-lg shadow-emerald-200/50 flex items-center justify-center gap-2"
-                                        >
-                                            <i className="fa-solid fa-play"></i> Înregistrează Intrare
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-4">
-                                        <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl border border-emerald-100">
-                                            <i className="fa-solid fa-business-time animate-bounce"></i>
-                                        </div>
-                                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Te-ai înregistrat la intrare la:</p>
-                                        <p className="text-3xl font-mono font-extrabold text-emerald-600 my-1">{activeCheckIn.time}</p>
-                                        <p className="text-xs text-slate-400 mb-5 font-semibold">Data: {activeCheckIn.date}</p>
-                                        
-                                        <button
-                                            onClick={handleQuickCheckOut}
-                                            className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-3.5 rounded-2xl transition duration-150 shadow-lg shadow-rose-200/50 flex items-center justify-center gap-2"
-                                        >
-                                            <i className="fa-solid fa-stop"></i> Înregistrează Ieșire
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-
-                            {}
-                            {/* ADĂUGARE MANUALĂ */}
-                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <i className="fa-solid fa-pen-to-square text-indigo-500"></i> Modifică sau Adaugă Manual
-                                </h3>
-                                <form onSubmit={handleAddManual} className="space-y-4">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Alege Data</label>
-                                        <input 
-                                            type="date" 
-                                            value={manualDate} 
-                                            onChange={(e) => setManualDate(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-semibold"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Oră/Minut Intrare</label>
-                                            <input 
-                                                type="time" 
-                                                value={manualCheckIn} 
-                                                onChange={(e) => setManualCheckIn(e.target.value)}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-mono font-bold"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Oră/Minut Ieșire</label>
-                                            <input 
-                                                type="time" 
-                                                value={manualCheckOut} 
-                                                onChange={(e) => setManualCheckOut(e.target.value)}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none font-mono font-bold"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Note de Observație</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Ex: Întrunire echipă, Lucru remote..." 
-                                            value={manualNotes} 
-                                            onChange={(e) => setManualNotes(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                                        />
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        className="w-full bg-slate-900 hover:bg-black text-white font-bold py-3 rounded-2xl transition duration-150 flex items-center justify-center gap-2 text-sm shadow-md"
-                                    >
-                                        <i className="fa-solid fa-plus"></i> Inserează în Tabelul Istoric
-                                    </button>
-                                </form>
-                            </div>
-
-                        </div>
-
-                        {/* COLOANA DREAPTĂ: LISTĂ PONTAJE */}
-                        <div className="lg:col-span-2 space-y-6">
-                            
-                            {}
-                            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                                <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-slate-50 to-white">
-                                    <div>
-                                        <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                                            <i className="fa-solid fa-folder-open text-blue-600"></i> Istoric Înregistrări Salvare
-                                        </h2>
-                                        <p className="text-xs text-slate-400 font-semibold">
-                                            {isCloudConnected ? "Securizat și stocat în timp real în Cloud" : "Stocat local pe browser-ul actual"}
-                                        </p>
-                                    </div>
-                                    {shifts.length > 0 && (
-                                        <button
-                                            onClick={exportToCSV}
-                                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs py-2.5 px-4 rounded-xl transition flex items-center gap-2 self-stretch sm:self-auto justify-center"
-                                        >
-                                            <i className="fa-solid fa-file-excel"></i> Export Excel (CSV)
-                                        </button>
-                                    )}
-                                </div>
-
-                                {isLoading ? (
-                                    <div className="text-center py-20">
-                                        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                                        <p className="text-slate-500 font-semibold text-xs">Preluăm baza de date din cloud...</p>
-                                    </div>
-                                ) : shifts.length === 0 ? (
-                                    <div className="text-center py-20 px-4">
-                                        <span className="text-5xl block mb-4">📂</span>
-                                        <p className="text-slate-500 font-bold">Istoricul tău este gol!</p>
-                                        <p className="text-slate-400 text-xs mt-1">Începe să utilizezi pontajul rapid sau adaugă înregistrări manuale din stânga.</p>
-                                    </div>
-                                ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                                    <th className="py-4 px-6">Data</th>
-                                                    <th className="py-4 px-4 text-center">Interval Orar</th>
-                                                    <th className="py-4 px-4 text-center">Timp Lucrat</th>
-                                                    <th className="py-4 px-4 hidden sm:table-cell">Note</th>
-                                                    <th className="py-4 px-6 text-right">Opțiuni</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                                                {shifts.map((shift) => {
-                                                    const duration = calculateDuration(shift.checkIn, shift.checkOut);
-                                                    return (
-                                                        <tr key={shift.id} className="hover:bg-slate-50/50 transition">
-                                                            <td className="py-4 px-6 font-bold text-slate-700 whitespace-nowrap">
-                                                                {new Date(shift.date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                            </td>
-                                                            <td className="py-4 px-4 text-center whitespace-nowrap">
-                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 font-mono text-xs font-bold border border-emerald-100">
-                                                                    {shift.checkIn}
-                                                                </span>
-                                                                <span className="mx-2 text-slate-300 font-bold">➔</span>
-                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 font-mono text-xs font-bold border border-rose-100">
-                                                                    {shift.checkOut}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-4 px-4 text-center font-extrabold text-indigo-600 whitespace-nowrap text-base">
-                                                                {formatDurationText(duration)}
-                                                            </td>
-                                                            <td className="py-4 px-4 text-slate-500 hidden sm:table-cell max-w-xs truncate font-medium">
-                                                                {shift.notes}
-                                                            </td>
-                                                            <td className="py-4 px-6 text-right whitespace-nowrap">
-                                                                <div className="flex justify-end gap-1.5">
-                                                                    <button
-                                                                        onClick={() => startEditing(shift)}
-                                                                        className="p-2 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition"
-                                                                        title="Modifică orele / detaliile"
-                                                                    >
-                                                                        <i className="fa-solid fa-pencil"></i>
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => triggerDeleteShift(shift.id)}
-                                                                        className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition"
-                                                                        title="Șterge definitiv"
-                                                                    >
-                                                                        <i className="fa-solid fa-trash"></i>
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-
-                        </div>
-                    </main>
-
-                    {}
-                    {/* MODAL DE EDITARE PONTAJ (Ora, Minut, Detalii) */}
-                    {editingShift && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all border border-slate-100">
-                                <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6">
-                                    <h3 className="text-lg font-bold">Editează detaliile Pontajului</h3>
-                                    <p className="text-xs text-blue-100 mt-1">Poți ajusta liber orele, minutele, data sau descrierea</p>
-                                </div>
-                                <form onSubmit={saveEdit} className="p-6 space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Dată Înregistrare</label>
-                                        <input 
-                                            type="date" 
-                                            value={editingShift.date} 
-                                            onChange={(e) => setEditingShift({ ...editingShift, date: e.target.value })}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ora/Minut Intrare</label>
-                                            <input 
-                                                type="time" 
-                                                value={editingShift.checkIn} 
-                                                onChange={(e) => setEditingShift({ ...editingShift, checkIn: e.target.value })}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ora/Minut Ieșire</label>
-                                            <input 
-                                                type="time" 
-                                                value={editingShift.checkOut} 
-                                                onChange={(e) => setEditingShift({ ...editingShift, checkOut: e.target.value })}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Note descriptive</label>
-                                        <input 
-                                            type="text" 
-                                            value={editingShift.notes} 
-                                            onChange={(e) => setEditingShift({ ...editingShift, notes: e.target.value })}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
-                                        />
-                                    </div>
-                                    <div className="flex gap-3 pt-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditingShift(null)}
-                                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-2xl transition text-sm"
-                                        >
-                                            Anulează
-                                        </button>
-                                        <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-2xl transition text-sm">
-                                            Salvează
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL CONFIGURARE CLOUD FIREBASE */}
-                    {showCloudModal && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden transform transition border border-slate-100">
-                                <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-850 text-white p-6">
-                                    <h3 className="text-lg font-bold"><i className="fa-solid fa-cloud"></i> Activare Sincronizare Cloud Gratuite</h3>
-                                    <p className="text-xs text-blue-100 mt-1">Conectează telefonul și calculatorul în mod permanent și gratuit!</p>
-                                </div>
-                                <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs text-slate-600 space-y-2 leading-relaxed">
-                                        <p className="font-bold text-slate-800">Cum obții gratuit configurarea securizată Firebase:</p>
-                                        <ol className="list-decimal list-inside space-y-1">
-                                            <li>Accesează <a href="https://console.firebase.google.com/" target="_blank" className="text-indigo-600 font-bold underline">Firebase Console</a> de la Google (complet gratuit).</li>
-                                            <li>Apasă pe <b>Add Project</b> și creează un proiect nou (de ex: "Manager-Pontaj").</li>
-                                            <li>În interiorul proiectului, adaugă o aplicație Web (apasă pe pictograma <b>&lt;/&gt;</b>).</li>
-                                            <li>Copiați obiectul <code className="bg-slate-200 px-1 py-0.5 rounded font-mono">firebaseConfig</code> generat.</li>
-                                            <li>Activează serviciul <b>Cloud Firestore</b> în modul de test din panoul lateral Firebase.</li>
-                                        </ol>
-                                    </div>
-
-                                    <form onSubmit={handleSaveFirebaseConfig} className="space-y-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Lipește Firebase Config (Format JSON)</label>
-                                            <textarea
-                                                rows="6"
-                                                placeholder={`{
-  "apiKey": "AIzaSy...",
-  "authDomain": "pontaj.firebaseapp.com",
-  "projectId": "pontaj",
-  "storageBucket": "pontaj.appspot.com",
-  "messagingSenderId": "...",
-  "appId": "..."
-}`}
-                                                value={tempConfigJson}
-                                                onChange={(e) => setTempConfigJson(e.target.value)}
-                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-mono text-emerald-400 placeholder-slate-700 focus:outline-none"
-                                                required
-                                            ></textarea>
-                                        </div>
-                                        <div className="flex gap-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowCloudModal(false)}
-                                                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-2xl transition text-sm"
-                                            >
-                                                Utilizează Local
-                                            </button>
-                                            <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl transition text-sm">
-                                                Activează Cloud
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL CONFIRMARE ȘTERGERE PERSONALIZATĂ (Înlocuiește dialogul nativ confirm()) */}
-                    {confirmDeleteId && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 border border-slate-100 text-center">
-                                <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4 text-xl border border-rose-100">
-                                    <i className="fa-solid fa-trash-can"></i>
-                                </div>
-                                <h3 className="text-base font-bold text-slate-950 mb-1">Confirmi ștergerea?</h3>
-                                <p className="text-xs text-slate-500 mb-6">Această acțiune este ireversibilă și va șterge pontajul selectat.</p>
-                                <div className="flex gap-3">
-                                    <button 
-                                        onClick={() => setConfirmDeleteId(null)}
-                                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition text-xs"
-                                    >
-                                        Anulează
-                                    </button>
-                                    <button 
-                                        onClick={executeDeleteShift}
-                                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl transition text-xs"
-                                    >
-                                        Șterge
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL CONFIRMARE DECONECTARE CLOUD */}
-                    {confirmDisconnect && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 border border-slate-100 text-center">
-                                <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 text-xl border border-amber-100">
-                                    <i className="fa-solid fa-cloud-slash"></i>
-                                </div>
-                                <h3 className="text-base font-bold text-slate-950 mb-1">Deconectezi Cloud-ul?</h3>
-                                <p className="text-xs text-slate-500 mb-6">Sincronizarea va fi dezactivată. Datele tale vor rămâne în siguranță stocate local în acest browser.</p>
-                                <div className="flex gap-3">
-                                    <button 
-                                        onClick={() => setConfirmDisconnect(false)}
-                                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition text-xs"
-                                    >
-                                        Anulează
-                                    </button>
-                                    <button 
-                                        onClick={disconnectCloud}
-                                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl transition text-xs"
-                                    >
-                                        Deconectează
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+    <!-- HEADER -->
+    <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-md sticky top-0 z-10">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/20 p-2.5 rounded-xl backdrop-blur-sm text-2xl">⏱️</div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight">Manager Pontaj Personal</h1>
+                    <p class="text-xs text-blue-100 font-medium">Urmărește-ți orele eficient și rapid 🚀</p>
                 </div>
-            );
+            </div>
+            <div class="text-center sm:text-right bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm">
+                <div id="live-clock" class="text-lg font-bold font-mono tracking-wider">00:00:00</div>
+                <div id="live-date" class="text-xs text-blue-100 capitalize">Dată...</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- PANEL CONTROL STÂNGA -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- STATISTICI -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span>📊</span> Statistici Perioadă
+                </h3>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="bg-blue-50/50 p-3 rounded-xl text-center">
+                        <p class="text-[10px] sm:text-xs text-slate-500 font-medium">Ore Totale</p>
+                        <p id="stat-total-hours" class="text-sm sm:text-base font-bold text-blue-600">0h 0m</p>
+                    </div>
+                    <div class="bg-indigo-50/50 p-3 rounded-xl text-center">
+                        <p class="text-[10px] sm:text-xs text-slate-500 font-medium">Zile Active</p>
+                        <p id="stat-active-days" class="text-sm sm:text-base font-bold text-indigo-600">0</p>
+                    </div>
+                    <div class="bg-purple-50/50 p-3 rounded-xl text-center">
+                        <p class="text-[10px] sm:text-xs text-slate-500 font-medium">Medie/Zi</p>
+                        <p id="stat-avg-hours" class="text-sm sm:text-base font-bold text-purple-600">0h</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PONTAJ RAPID -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span>⚡</span> Pontaj Rapid Acum
+                </h3>
+                
+                <!-- Starea: Oprit -->
+                <div id="quick-check-off" class="text-center py-4">
+                    <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl border-4 border-red-100 animate-pulse">🛑</div>
+                    <p class="text-sm text-slate-500 mb-4">În prezent nu ești pontat la muncă.</p>
+                    <button id="btn-check-in" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl transition duration-200 transform active:scale-95 shadow-md shadow-emerald-200 flex items-center justify-center gap-2 text-base cursor-pointer">
+                        <span>🟢</span> Pontează Intrare
+                    </button>
+                </div>
+
+                <!-- Starea: Pornit -->
+                <div id="quick-check-on" class="text-center py-4 hidden">
+                    <div class="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl border-4 border-emerald-100 animate-pulse">🟢</div>
+                    <p class="text-sm font-semibold text-slate-700">Ai început lucrul la:</p>
+                    <p id="active-check-in-time" class="text-2xl font-mono font-bold text-emerald-600 mb-1">00:00</p>
+                    <p id="active-check-in-date" class="text-xs text-slate-400 mb-5">Data: --</p>
+                    <button id="btn-check-out" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl transition duration-200 transform active:scale-95 shadow-md shadow-red-200 flex items-center justify-center gap-2 text-base cursor-pointer">
+                        <span>🔴</span> Pontează Ieșire
+                    </button>
+                </div>
+            </div>
+
+            <!-- ADĂUGARE MANUALĂ -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span>✍️</span> Adaugă Manual Pontaj
+                </h3>
+                <form id="manual-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Data</label>
+                        <input type="date" id="form-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Ora Intrare</label>
+                            <input type="time" id="form-in" value="09:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Ora Ieșire</label>
+                            <input type="time" id="form-out" value="17:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Observații (opțional)</label>
+                        <input type="text" id="form-notes" placeholder="Ex: Lucru de acasă, proiect X..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button type="submit" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 rounded-xl transition duration-150 flex items-center justify-center gap-2 text-sm cursor-pointer">
+                        <span>➕</span> Adaugă în Istoric
+                    </button>
+                </form>
+            </div>
+
+        </div>
+
+        <!-- LISTĂ PONTAJE DREAPTA -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Istoric Pontaje</h2>
+                        <p class="text-xs text-slate-400 font-medium">Datele sunt salvate automat în siguranță, în browser-ul tău local 🔒</p>
+                    </div>
+                    <button id="btn-export" class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs py-2 px-4 rounded-xl transition duration-150 flex items-center gap-2 self-stretch sm:self-auto justify-center cursor-pointer hidden">
+                        <span>📥</span> Descarcă Excel (CSV)
+                    </button>
+                </div>
+
+                <!-- Mesaj tabel gol -->
+                <div id="empty-state" class="text-center py-16 px-4">
+                    <span class="text-5xl block mb-4">📭</span>
+                    <p class="text-slate-500 font-semibold text-lg">Nu ai niciun pontaj salvat încă!</p>
+                    <p class="text-slate-400 text-sm mt-1">Folosește panoul din stânga pentru a înregistra orele de lucru.</p>
+                </div>
+
+                <!-- Tabelul cu pontaje -->
+                <div id="table-wrapper" class="overflow-x-auto hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/75 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase">
+                                <th class="py-4 px-6">Data</th>
+                                <th class="py-4 px-4 text-center">Interval</th>
+                                <th class="py-4 px-4 text-center">Durată</th>
+                                <th class="py-4 px-4 hidden sm:table-cell">Observații</th>
+                                <th class="py-4 px-6 text-right">Acțiuni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shifts-tbody" class="divide-y divide-slate-100 text-sm">
+                            <!-- Rândurile se vor injecta prin JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODAL PENTRU EDITARE -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6">
+                <h3 class="text-lg font-bold">Editează Pontajul ✏️</h3>
+                <p class="text-xs text-blue-100 mt-1">Modifică cu precizie orele sau minutele</p>
+            </div>
+            <form id="edit-form" class="p-6 space-y-4">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Data</label>
+                    <input type="date" id="edit-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Ora Intrare</label>
+                        <input type="time" id="edit-in" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Ora Ieșire</label>
+                        <input type="time" id="edit-out" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Observații</label>
+                    <input type="text" id="edit-notes" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" id="btn-close-modal" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl transition text-sm cursor-pointer">Anulează</button>
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition text-sm cursor-pointer">Salvează</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LOGICĂ JAVASCRIPT COMPLETĂ -->
+    <script>
+        // Inițializare structuri de date din LocalStorage (salvare permanentă în browser)
+        let shifts = JSON.parse(localStorage.getItem('pontaj_shifts')) || [];
+        let activeCheckIn = JSON.parse(localStorage.getItem('pontaj_active')) || null;
+
+        // Setare zi curentă implicită în formular
+        document.getElementById('form-date').value = new Date().toISOString().split('T')[0];
+
+        // Ceas Live în Header
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('live-date').innerText = now.toLocaleDateString('ro-RO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Calcul durată ore zecimale între două stringuri HH:MM
+        function calculateDuration(start, end) {
+            const [startH, startM] = start.split(':').map(Number);
+            const [endH, endM] = end.split(':').map(Number);
+            let diffMins = (endH * 60 + endM) - (startH * 60 + startM);
+            if (diffMins < 0) diffMins += 24 * 60; // Peste noapte
+            return diffMins / 60;
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        function formatDurationText(hoursDecimal) {
+            const hours = Math.floor(hoursDecimal);
+            const minutes = Math.round((hoursDecimal - hours) * 60);
+            return `${hours}h ${minutes}m`;
+        }
+
+        // Randare tabel și recalculare statistici
+        function render() {
+            localStorage.setItem('pontaj_shifts', JSON.stringify(shifts));
+            localStorage.setItem('pontaj_active', JSON.stringify(activeCheckIn));
+
+            // Panou Pontaj Rapid
+            if (activeCheckIn) {
+                document.getElementById('quick-check-off').classList.add('hidden');
+                document.getElementById('quick-check-on').classList.remove('hidden');
+                document.getElementById('active-check-in-time').innerText = activeCheckIn.time;
+                document.getElementById('active-check-in-date').innerText = `Data: ${activeCheckIn.date}`;
+            } else {
+                document.getElementById('quick-check-off').classList.remove('hidden');
+                document.getElementById('quick-check-on').classList.add('hidden');
+            }
+
+            // Istoric & State Gol
+            const tbody = document.getElementById('shifts-tbody');
+            tbody.innerHTML = '';
+
+            if (shifts.length === 0) {
+                document.getElementById('empty-state').classList.remove('hidden');
+                document.getElementById('table-wrapper').classList.add('hidden');
+                document.getElementById('btn-export').classList.add('hidden');
+            } else {
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('table-wrapper').classList.remove('hidden');
+                document.getElementById('btn-export').classList.remove('hidden');
+
+                shifts.forEach(shift => {
+                    const duration = calculateDuration(shift.checkIn, shift.checkOut);
+                    const formattedDate = new Date(shift.date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50/50 transition duration-150";
+                    tr.innerHTML = `
+                        <td class="py-4 px-6 font-semibold text-slate-700 whitespace-nowrap">${formattedDate}</td>
+                        <td class="py-4 px-4 text-center whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-mono text-xs font-semibold">${shift.checkIn}</span>
+                            <span class="mx-2 text-slate-300">➔</span>
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-red-50 text-red-700 font-mono text-xs font-semibold">${shift.checkOut}</span>
+                        </td>
+                        <td class="py-4 px-4 text-center font-bold text-indigo-600 whitespace-nowrap">${formatDurationText(duration)}</td>
+                        <td class="py-4 px-4 text-slate-500 hidden sm:table-cell max-w-xs truncate">${shift.notes}</td>
+                        <td class="py-4 px-6 text-right whitespace-nowrap">
+                            <div class="flex justify-end gap-2">
+                                <button onclick="openEditModal('${shift.id}')" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-blue-600 transition cursor-pointer" title="Editează">✏️</button>
+                                <button onclick="deleteShift('${shift.id}')" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-red-600 transition cursor-pointer" title="Șterge">🗑️</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // Calcul Statistici
+            const totalHours = shifts.reduce((acc, s) => acc + calculateDuration(s.checkIn, s.checkOut), 0);
+            const activeDays = shifts.length;
+            const avgHours = activeDays > 0 ? (totalHours / activeDays).toFixed(1) : 0;
+
+            document.getElementById('stat-total-hours').innerText = formatDurationText(totalHours);
+            document.getElementById('stat-active-days').innerText = activeDays;
+            document.getElementById('stat-avg-hours').innerText = `${avgHours}h`;
+        }
+
+        // Eveniment: Pontat Intrare Rapidă
+        document.getElementById('btn-check-in').addEventListener('click', () => {
+            const now = new Date();
+            activeCheckIn = {
+                date: now.toISOString().split('T')[0],
+                time: now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit', hour12: false })
+            };
+            render();
+        });
+
+        // Eveniment: Pontat Ieșire Rapidă
+        document.getElementById('btn-check-out').addEventListener('click', () => {
+            if (!activeCheckIn) return;
+            const now = new Date();
+            const timeOut = now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit', hour12: false });
+            
+            shifts.unshift({
+                id: Date.now().toString(),
+                date: activeCheckIn.date,
+                checkIn: activeCheckIn.time,
+                checkOut: timeOut,
+                notes: 'Pontat rapid în timp real ⚡'
+            });
+            activeCheckIn = null;
+            render();
+        });
+
+        // Eveniment: Salvare Formular Manual
+        document.getElementById('manual-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const dateInput = document.getElementById('form-date').value;
+            const inInput = document.getElementById('form-in').value;
+            const outInput = document.getElementById('form-out').value;
+            const notesInput = document.getElementById('form-notes').value;
+
+            shifts.unshift({
+                id: Date.now().toString(),
+                date: dateInput,
+                checkIn: inInput,
+                checkOut: outInput,
+                notes: notesInput || 'Adăugat manual ✍️'
+            });
+            
+            document.getElementById('form-notes').value = '';
+            render();
+        });
+
+        // Funcție: Ștergere Pontaj
+        window.deleteShift = function(id) {
+            if (confirm('Sigur vrei să ștergi acest pontaj?')) {
+                shifts = shifts.filter(s => s.id !== id);
+                render();
+            }
+        };
+
+        // Modale Editare
+        const modal = document.getElementById('edit-modal');
+        window.openEditModal = function(id) {
+            const shift = shifts.find(s => s.id === id);
+            if (!shift) return;
+
+            document.getElementById('edit-id').value = shift.id;
+            document.getElementById('edit-date').value = shift.date;
+            document.getElementById('edit-in').value = shift.checkIn;
+            document.getElementById('edit-out').value = shift.checkOut;
+            document.getElementById('edit-notes').value = shift.notes;
+
+            modal.classList.remove('hidden');
+        };
+
+        document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.add('hidden'));
+
+        document.getElementById('edit-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const shift = shifts.find(s => s.id === id);
+            
+            if (shift) {
+                shift.date = document.getElementById('edit-date').value;
+                shift.checkIn = document.getElementById('edit-in').value;
+                shift.checkOut = document.getElementById('edit-out').value;
+                shift.notes = document.getElementById('edit-notes').value;
+            }
+
+            modal.classList.add('hidden');
+            render();
+        });
+
+        // Funcție: Export CSV (Excel)
+        document.getElementById('btn-export').addEventListener('click', () => {
+            let csv = "\ufeffData,Ora Intrare,Ora Iesire,Durata (Ore),Observatii\n";
+            shifts.forEach(s => {
+                const dur = calculateDuration(s.checkIn, s.checkOut).toFixed(2);
+                csv += `"${s.date}","${s.checkIn}","${s.checkOut}","${dur}","${s.notes}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `pontaj_lucru_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        });
+
+        // Pornire randare inițială
+        render();
     </script>
 </body>
 </html>

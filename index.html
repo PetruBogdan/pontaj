@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manager Pontaj - Sincronizare Automată</title>
+    <title>Manager Pontaj - Sincronizare Inteligentă</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
@@ -37,8 +37,11 @@
                         <span id="cloud-badge" class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500 text-white">
                             Mod Local
                         </span>
+                        <span id="net-badge" class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500 text-white">
+                            Online 🌐
+                        </span>
                     </h1>
-                    <p class="text-xs text-indigo-100">Sincronizare automată în timp real 🔄</p>
+                    <p class="text-xs text-indigo-100">Sincronizare hibridă (Local + Cloud în timp real) 🔄</p>
                 </div>
             </div>
             <div class="flex items-center gap-4">
@@ -53,7 +56,7 @@
         </div>
     </header>
 
-    <!-- BANNER MOD LOCAL / ERORI -->
+    <!-- BANNER STARE APLICAȚIE -->
     <div id="offline-banner" class="bg-amber-500/15 border-b border-amber-500/25 py-2 px-4 text-center">
         <p id="offline-text" class="text-xs text-amber-800 font-semibold">
             ⚠️ Datele sunt salvate doar pe acest dispozitiv. Configurează Cloud-ul pentru a activa sincronizarea automată!
@@ -70,7 +73,7 @@
             <div id="sync-panel" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800 hidden">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
-                        <i class="fa-solid fa-circle-dot text-emerald-400 animate-pulse"></i> Sincronizare Activă
+                        <i class="fa-solid fa-circle-dot text-emerald-400 animate-pulse" id="sync-dot"></i> Sincronizare Activă
                     </h3>
                     <span id="sync-status-tag" class="text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
                         Conectat Live
@@ -159,7 +162,7 @@
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Note / Observații</label>
-                        <input type="text" id="manual-notes" placeholder="Ex: Lucru..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                        <input type="text" id="manual-notes" placeholder="Ex: Lucru din birou..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
                     </div>
                     <button type="submit" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-3 rounded-2xl transition text-sm cursor-pointer">
                         <i class="fa-solid fa-plus"></i> Adaugă în Istoric
@@ -239,6 +242,7 @@
 
         let db = null;
         let unsubscribeCloud = null;
+        let isOnline = navigator.onLine;
 
         document.getElementById('manual-date').value = new Date().toISOString().split('T')[0];
 
@@ -258,12 +262,58 @@
             setTimeout(() => toast.remove(), 4500);
         }
 
-        // Ceas rapid
+        // FUNCȚIE FORMATAT DATA ÎN STIL ROMÂNESC: ZZ.LL.AAAA (Ziua)
+        function formatRomanianDate(dateString) {
+            if (!dateString) return '--';
+            const parts = dateString.split('-');
+            if (parts.length !== 3) return dateString; // Fallback
+            
+            const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+            const zileSaptamana = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
+            
+            const zi = String(dateObj.getDate()).padStart(2, '0');
+            const luna = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const an = dateObj.getFullYear();
+            const numeZi = zileSaptamana[dateObj.getDay()];
+
+            return `${zi}.${luna}.${an} (${numeZi})`;
+        }
+
+        // Ceas rapid cu format românesc
         setInterval(() => {
             const now = new Date();
             document.getElementById('live-clock').innerText = now.toLocaleTimeString('ro-RO');
-            document.getElementById('live-date').innerText = now.toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' });
+            
+            const zile = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
+            const zi = String(now.getDate()).padStart(2, '0');
+            const luna = String(now.getMonth() + 1).padStart(2, '0');
+            const an = now.getFullYear();
+            document.getElementById('live-date').innerText = `${zi}.${luna}.${an} - ${ziles[now.getDay()]}`;
         }, 1000);
+
+        // DETECTARE LIVE STATUS INTERNET (ONLINE / OFFLINE)
+        window.addEventListener('online', () => {
+            isOnline = true;
+            document.getElementById('net-badge').className = "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500 text-white";
+            document.getElementById('net-badge').innerText = "Online 🌐";
+            showToast("Te-ai reconectat la internet! Se sincronizează datele... 🔄");
+            
+            if (firebaseConfig && !db) {
+                initFirebase();
+            } else if (db && syncId) {
+                pushToCloud(); // Împinge modificările făcute offline
+                startLiveListening();
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            document.getElementById('net-badge').className = "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-rose-500 text-white";
+            document.getElementById('net-badge').innerText = "Offline ☁️❌";
+            document.getElementById('sync-status-tag').innerText = "Mod Offline Securat";
+            document.getElementById('sync-status-tag').className = "text-[9px] bg-amber-500/20 text-amber-500 font-bold px-2 py-0.5 rounded-full border border-amber-500/30";
+            showToast("Ai pierdut conexiunea! Datele se salvează local în siguranță. 🔐", true);
+        });
 
         function calculateDuration(start, end) {
             const [sH, sM] = start.split(':').map(Number);
@@ -298,9 +348,13 @@
                 document.getElementById('display-sync-id').innerText = syncId;
                 document.getElementById('btn-cloud-setup').innerHTML = '<i class="fa-solid fa-cloud-slash"></i> Oprește Cloud';
 
-                startLiveListening();
+                if (isOnline) {
+                    startLiveListening();
+                } else {
+                    window.dispatchEvent(new Event('offline'));
+                }
             } catch (e) {
-                showToast("Eroare inițializare script: " + e.message, true);
+                showToast("Eroare script Cloud: " + e.message, true);
                 disableCloud();
             }
         }
@@ -325,12 +379,15 @@
         }
 
         function startLiveListening() {
-            if (!db || !syncId) return;
+            if (!db || !syncId || !isOnline) return;
 
             document.getElementById('loading-state').classList.remove('hidden');
             
             unsubscribeCloud = db.collection('pontaje_universale').doc(syncId).onSnapshot((doc) => {
                 document.getElementById('loading-state').classList.add('hidden');
+                
+                if (!isOnline) return; // Ignorăm snapshot-urile dacă între timp s-a deconectat
+
                 document.getElementById('sync-status-tag').innerText = "Conectat Live";
                 document.getElementById('sync-status-tag').className = "text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30";
                 
@@ -350,19 +407,19 @@
                 document.getElementById('sync-status-tag').innerText = "Eroare Conexiune";
                 document.getElementById('sync-status-tag').className = "text-[9px] bg-rose-500/20 text-rose-400 font-bold px-2 py-0.5 rounded-full border border-rose-500/30";
                 
-                // AFIȘARE EROARE DIRECT PE ECRAN PENTRU DEBUGGING RAPID
                 document.getElementById('offline-banner').classList.remove('hidden');
                 document.getElementById('offline-text').className = "text-xs text-rose-800 font-bold";
-                document.getElementById('offline-text').innerText = "🛑 EROARE CLOUD: " + error.message;
-                console.error("Firebase Error:", error);
+                document.getElementById('offline-text').innerText = "🛑 EROARE PERMISIUNI CLOUD: " + error.message;
             });
         }
 
         async function pushToCloud() {
+            // SALVARE LOCALĂ PRIORITARĂ (Garantează că nu pierdem datele indiferent de rețea)
             localStorage.setItem('pontaj_shifts', JSON.stringify(shifts));
             localStorage.setItem('pontaj_active', JSON.stringify(activeCheckIn));
 
-            if (db && syncId) {
+            // URCARE ÎN CLOUD DOAR DACĂ AVEM INTERNET ACTIV
+            if (db && syncId && isOnline) {
                 try {
                     await db.collection('pontaje_universale').doc(syncId).set({
                         shifts: shifts,
@@ -370,7 +427,7 @@
                         lastUpdated: new Date().toISOString()
                     });
                 } catch (e) {
-                    showToast("Eroare la scriere: " + e.message, true);
+                    console.error("Eroare sync cloud", e);
                 }
             }
         }
@@ -380,7 +437,7 @@
                 document.getElementById('quick-check-off').classList.add('hidden');
                 document.getElementById('quick-check-on').classList.remove('hidden');
                 document.getElementById('quick-in-time').innerText = activeCheckIn.time;
-                document.getElementById('quick-in-info').innerText = `Data: ${activeCheckIn.date} | Sursă: ${activeCheckIn.device}`;
+                document.getElementById('quick-in-info').innerText = `Data: ${formatRomanianDate(activeCheckIn.date)} | Sursă: ${activeCheckIn.device}`;
             } else {
                 document.getElementById('quick-check-off').classList.remove('hidden');
                 document.getElementById('quick-check-on').classList.add('hidden');
@@ -403,11 +460,11 @@
                     const tr = document.createElement('tr');
                     tr.className = "hover:bg-slate-50 transition";
                     tr.innerHTML = `
-                        <td class="py-4 px-6 font-bold text-slate-700">${s.date}</td>
+                        <td class="py-4 px-6 font-bold text-slate-700">${formatRomanianDate(s.date)}</td>
                         <td class="py-4 px-4 text-center font-mono"><span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-bold">${s.checkIn}</span> ➔ <span class="bg-rose-50 text-rose-700 px-2 py-1 rounded text-xs font-bold">${s.checkOut}</span></td>
                         <td class="py-4 px-4 text-center font-extrabold text-indigo-600">${formatDuration(dur)}</td>
                         <td class="py-4 px-4 hidden sm:table-cell text-slate-500 max-w-xs truncate">${s.notes}</td>
-                        <td class="py-4 px-4 text-center text-xs font-bold text-slate-600">${s.device || 'Calculator 💻'}</td>
+                        <td class="py-4 px-4 text-center text-xs font-bold text-slate-600">${s.device || 'PC 💻'}</td>
                         <td class="py-4 px-6 text-right"><button onclick="deleteShift('${s.id}')" class="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"><i class="fa-solid fa-trash"></i></button></td>
                     `;
                     tbody.appendChild(tr);
@@ -429,7 +486,7 @@
             };
             pushToCloud();
             render();
-            showToast("Te-ai pontat la intrare! 🟢");
+            showToast(isOnline ? "Te-ai pontat! Salvat în Cloud. 🟢" : "Te-ai pontat! Salvat local offline. 🔐");
         });
 
         document.getElementById('btn-quick-out').addEventListener('click', () => {
@@ -446,7 +503,7 @@
             activeCheckIn = null;
             pushToCloud();
             render();
-            showToast("Te-ai pontat la ieșire! 🔴");
+            showToast(isOnline ? "Ieșire salvată în Cloud! 🔴" : "Ieșire salvată local offline! 🔐");
         });
 
         document.getElementById('manual-form').addEventListener('submit', (e) => {
@@ -462,7 +519,7 @@
             document.getElementById('manual-notes').value = '';
             pushToCloud();
             render();
-            showToast("Pontaj adăugat! ✏️");
+            showToast("Pontaj adăugat cu succes! ✏️");
         });
 
         window.deleteShift = function(id) {
@@ -482,8 +539,8 @@
                 syncId = targetId;
                 localStorage.setItem('pontaj_sync_id', targetId);
                 document.getElementById('input-sync-id').value = '';
-                startLiveListening();
-                showToast("Conexiune stabilită! Se descarcă datele... 🔄");
+                initFirebase();
+                showToast("ID sincronizat! Datele se încarcă... 🔄");
             }
         });
 
@@ -514,7 +571,7 @@
                     localStorage.setItem('pontaj_firebase_config', JSON.stringify(parsed));
                     document.getElementById('cloud-modal').classList.add('hidden');
                     initFirebase();
-                    showToast("Configurație salvată! Se conectează... ☁️");
+                    showToast("Configurație Cloud activată! ☁️");
                 } else {
                     throw new Error();
                 }
@@ -525,17 +582,22 @@
 
         document.getElementById('btn-copy-code').addEventListener('click', () => {
             navigator.clipboard.writeText(syncId);
-            showToast("Cod copiat! 📋");
+            showToast("Cod copiat pe clipboard! 📋");
         });
 
         document.getElementById('btn-export').addEventListener('click', () => {
             let csv = "\ufeffData,Intrare,Iesire,Dispozitiv,Note\n";
-            shifts.forEach(s => csv += `"${s.date}","${s.checkIn}","${s.checkOut}","${s.device || ''}","${s.notes}"\n`);
+            shifts.forEach(s => csv += `"${formatRomanianDate(s.date)}","${s.checkIn}","${s.checkOut}","${s.device || ''}","${s.notes}"\n`);
             const link = document.createElement("a");
             link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
             link.download = `pontaj_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
         });
+
+        // Verificare stare rețea la boot
+        if (!navigator.onLine) {
+            isOnline = false;
+        }
 
         initFirebase();
         render();

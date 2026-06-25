@@ -5,14 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manager Pontaj - Sincronizare Inteligentă</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Configurare Tailwind pentru Dark Mode prin clasă manuală
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
     
-    <!-- Firebase SDK (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-    <!-- FontAwesome pentru iconițe -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -20,13 +23,12 @@
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen pb-12 transition-colors duration-200">
 
     <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
 
-    <!-- HEADER RESPONSIV REPARAT -->
     <header class="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-700 text-white shadow-xl sticky top-0 z-20">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-3 md:flex-row justify-between items-center text-center md:text-left">
             
             <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                 <div class="bg-white/10 p-2.5 rounded-2xl border border-white/10 hidden sm:block">
@@ -44,37 +46,38 @@
                             </span>
                         </div>
                     </div>
-                    <p class="text-xs text-indigo-100 mt-1">Sincronizare hibridă (Local + Cloud în timp real) 🔄</p>
+                    <p class="text-[11px] text-indigo-100 mt-0.5">Sincronizare hibridă (Local + Cloud în timp real) 🔄</p>
                 </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto justify-center md:justify-end">
-                <div class="bg-white/10 px-4 py-2 rounded-2xl border border-white/10 text-center font-mono hidden sm:block">
+            <div class="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto justify-center md:justify-end">
+                <div class="bg-white/10 px-4 py-1.5 rounded-2xl border border-white/10 text-center font-mono w-full sm:w-auto">
                     <div id="live-clock" class="text-base font-bold tracking-wider">00:00:00</div>
                     <div id="live-date" class="text-[9px] text-indigo-100 capitalize">Dată...</div>
                 </div>
-                <button id="btn-cloud-setup" class="w-full sm:w-auto bg-white text-indigo-700 hover:bg-indigo-50 px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition shadow-md cursor-pointer whitespace-nowrap">
-                    <i class="fa-solid fa-cloud"></i> Configurare Cloud
-                </button>
+                <div class="flex items-center gap-2 w-full sm:w-auto justify-center">
+                    <button id="btn-theme-toggle" class="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-xl border border-white/10 transition cursor-pointer flex items-center justify-center" title="Schimbă Tema">
+                        <i id="theme-icon" class="fa-solid fa-moon text-sm"></i>
+                    </button>
+                    <button id="btn-cloud-setup" class="flex-1 sm:flex-initial bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition shadow-md cursor-pointer whitespace-nowrap">
+                        <i class="fa-solid fa-cloud"></i> Configurați Cloud
+                    </button>
+                </div>
             </div>
 
         </div>
     </header>
 
-    <!-- BANNER STARE APLICAȚIE -->
     <div id="offline-banner" class="bg-amber-500/15 border-b border-amber-500/25 py-2 px-4 text-center">
-        <p id="offline-text" class="text-xs text-amber-800 font-semibold">
+        <p id="offline-text" class="text-xs text-amber-800 dark:text-amber-400 font-semibold">
             ⚠️ Datele sunt salvate doar pe acest dispozitiv. Configurează Cloud-ul pentru a activa sincronizarea automată!
         </p>
     </div>
 
-    <!-- MAIN CONTENT -->
     <main class="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <!-- CONTROL PANEL -->
         <div class="lg:col-span-1 space-y-6">
 
-            <!-- PANOU SINCRONIZARE ACTIVĂ -->
             <div id="sync-panel" class="bg-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800 hidden">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
@@ -104,89 +107,104 @@
                 </div>
             </div>
 
-            <!-- STATISTICI -->
-            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800/80">
+                <h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <i class="fa-solid fa-chart-simple text-blue-500"></i> Statistici Perioadă
                 </h3>
                 <div class="grid grid-cols-3 gap-2">
-                    <div class="bg-blue-50/50 p-3 rounded-2xl text-center">
-                        <p class="text-[10px] text-slate-500 font-bold uppercase">Ore Lucrate</p>
-                        <p id="stat-hours" class="text-sm font-extrabold text-blue-600 mt-1">0h 0m</p>
+                    <div class="bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-2xl text-center">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Ore Lucrate</p>
+                        <p id="stat-hours" class="text-sm font-extrabold text-blue-600 dark:text-blue-400 mt-1">0h 0m</p>
                     </div>
-                    <div class="bg-indigo-50/50 p-3 rounded-2xl text-center">
-                        <p class="text-[10px] text-slate-500 font-bold uppercase">Zile Pontate</p>
-                        <p id="stat-days" class="text-sm font-extrabold text-indigo-600 mt-1">0</p>
+                    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 p-3 rounded-2xl text-center">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Zile</p>
+                        <p id="stat-days" class="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">0</p>
                     </div>
-                    <div class="bg-purple-50/50 p-3 rounded-2xl text-center">
-                        <p class="text-[10px] text-slate-500 font-bold uppercase">Medie / Zi</p>
-                        <p id="stat-avg" class="text-sm font-extrabold text-purple-600 mt-1">0h</p>
+                    <div class="bg-purple-50/50 dark:bg-purple-950/20 p-3 rounded-2xl text-center">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Medie / Zi</p>
+                        <p id="stat-avg" class="text-sm font-extrabold text-purple-600 dark:text-purple-400 mt-1">0h</p>
                     </div>
                 </div>
             </div>
 
-            <!-- PONTAJ RAPID -->
-            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800/80">
+                <h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <i class="fa-solid fa-bolt text-amber-500"></i> Pontaj Rapid
                 </h3>
                 <div id="quick-check-off" class="text-center py-2">
-                    <button id="btn-quick-in" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 cursor-pointer">
+                    <button id="btn-quick-in" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-emerald-200 dark:shadow-none flex items-center justify-center gap-2 cursor-pointer">
                         <i class="fa-solid fa-play"></i> Înregistrează Intrare
                     </button>
                 </div>
                 <div id="quick-check-on" class="text-center py-2 hidden">
-                    <p class="text-xs font-bold uppercase text-slate-400">Ești pontat la muncă de la ora:</p>
-                    <p id="quick-in-time" class="text-3xl font-mono font-extrabold text-emerald-600 my-1">00:00</p>
-                    <p id="quick-in-info" class="text-[11px] text-slate-400 mb-4">Data: -- | Sursă: --</p>
-                    <button id="btn-quick-out" class="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-rose-200 flex items-center justify-center gap-2 cursor-pointer">
+                    <p class="text-xs font-bold uppercase text-slate-400 dark:text-slate-500">Ești pontat la muncă de la ora:</p>
+                    <p id="quick-in-time" class="text-3xl font-mono font-extrabold text-emerald-600 dark:text-emerald-400 my-1">00:00</p>
+                    <p id="quick-in-info" class="text-[11px] text-slate-400 dark:text-slate-500 mb-4">Data: -- | Sursă: --</p>
+                    <button id="btn-quick-out" class="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-rose-200 dark:shadow-none flex items-center justify-center gap-2 cursor-pointer">
                         <i class="fa-solid fa-stop"></i> Înregistrează Ieșire
                     </button>
                 </div>
             </div>
 
-            <!-- ADĂUGARE MANUALĂ -->
-            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800/80">
+                <h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <i class="fa-solid fa-pen-to-square text-indigo-500"></i> Adaugă Manual
                 </h3>
                 <form id="manual-form" class="space-y-4">
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Data</label>
-                        <input type="date" id="manual-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none" required>
+                        <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Data</label>
+                        <input type="date" id="manual-date" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none" required>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Ora Intrare</label>
-                            <input type="time" id="manual-in" value="09:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono" required>
+                            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Ora Intrare</label>
+                            <input type="time" id="manual-in" value="09:00" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono" required>
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Ora Ieșire</label>
-                            <input type="time" id="manual-out" value="17:00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono" required>
+                            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Ora Ieșire</label>
+                            <input type="time" id="manual-out" value="17:00" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono" required>
                         </div>
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Note / Observații</label>
-                        <input type="text" id="manual-notes" placeholder="Ex: Lucru..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+                        <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Note / Observații</label>
+                        <input type="text" id="manual-notes" placeholder="Ex: Lucru..." class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
                     </div>
-                    <button type="submit" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-3 rounded-2xl transition text-sm cursor-pointer">
+                    <button type="submit" class="w-full bg-slate-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl transition text-sm cursor-pointer">
                         <i class="fa-solid fa-plus"></i> Adaugă în Istoric
                     </button>
                 </form>
             </div>
         </div>
 
-        <!-- ISTORIC -->
         <div class="lg:col-span-2 space-y-6">
-            <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800/80 overflow-hidden">
+                
+                <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                        <h2 class="text-base font-bold text-slate-800"><i class="fa-solid fa-folder-open text-blue-600"></i> Istoric Înregistrări</h2>
+                        <h2 class="text-base font-bold text-slate-800 dark:text-slate-100"><i class="fa-solid fa-folder-open text-blue-600"></i> Istoric Înregistrări</h2>
                         <p id="storage-indicator" class="text-xs text-slate-400 font-medium">Stocare locală activă</p>
                     </div>
-                    <button id="btn-export" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs py-2.5 px-4 rounded-xl transition flex items-center gap-2 cursor-pointer hidden">
+                    <button id="btn-export" class="bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-400 font-bold text-xs py-2.5 px-4 rounded-xl transition flex items-center gap-2 cursor-pointer hidden">
                         <i class="fa-solid fa-file-excel"></i> Descarcă CSV
                     </button>
+                </div>
+
+                <div class="bg-slate-50/60 dark:bg-slate-950/40 px-6 py-3.5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase whitespace-nowrap">Lună:</span>
+                        <select id="filter-month" class="w-full sm:w-auto bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none">
+                            <option value="all">Toate lunile</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase whitespace-nowrap">Sortare:</span>
+                        <select id="sort-order" class="w-full sm:w-auto bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none">
+                            <option value="date-desc">Cele mai noi primele</option>
+                            <option value="date-asc">Cele mai vechi primele</option>
+                            <option value="duration-desc">Durata cea mai mare</option>
+                            <option value="duration-asc">Durata cea mai mică</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div id="loading-state" class="text-center py-16 hidden">
@@ -196,13 +214,13 @@
 
                 <div id="empty-state" class="text-center py-16">
                     <span class="text-4xl block mb-2">📂</span>
-                    <p class="text-slate-500 font-bold text-sm">Niciun pontaj înregistrat încă.</p>
+                    <p class="text-slate-500 font-bold text-sm">Niciun pontaj înregistrat sau nicio potrivire cu filtrele selectate.</p>
                 </div>
 
                 <div id="table-container" class="overflow-x-auto hidden">
                     <table class="w-full text-left border-collapse">
                         <thead>
-                            <tr class="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <tr class="bg-slate-50/70 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                                 <th class="py-4 px-6">Data</th>
                                 <th class="py-4 px-4 text-center">Interval</th>
                                 <th class="py-4 px-4 text-center">Durată</th>
@@ -211,34 +229,66 @@
                                 <th class="py-4 px-6 text-right">Acțiuni</th>
                             </tr>
                         </thead>
-                        <tbody id="shifts-tbody" class="divide-y divide-slate-100 text-sm"></tbody>
+                        <tbody id="shifts-tbody" class="divide-y divide-slate-100 dark:divide-slate-800 text-sm"></tbody>
                     </table>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- MODAL FIREBASE -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 dark:border-slate-800">
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6">
+                <h3 class="text-lg font-bold">✏️ Editează Înregistrarea</h3>
+                <p class="text-xs text-blue-100 mt-1">Corectează orele sau modifică nota explicativă</p>
+            </div>
+            <form id="edit-form" class="p-6 space-y-4">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data</label>
+                    <input type="date" id="edit-date" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none" required>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Ora Intrare</label>
+                        <input type="time" id="edit-in" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Ora Ieșire</label>
+                        <input type="time" id="edit-out" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Note / Observații</label>
+                    <input type="text" id="edit-notes" class="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" id="btn-close-edit" class="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold py-3 rounded-2xl text-sm cursor-pointer">Anulează</button>
+                    <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl text-sm cursor-pointer">Salvează Modificările</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="cloud-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 dark:border-slate-800">
             <div class="bg-gradient-to-r from-indigo-700 to-purple-700 text-white p-6">
                 <h3 class="text-lg font-bold">Configurare Cloud</h3>
                 <p class="text-xs text-indigo-100 mt-1">Lipește configurația aplicației tale</p>
             </div>
             <form id="firebase-config-form" class="p-6 space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Lipește JSON-ul sau Codul script</label>
+                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Lipește JSON-ul sau Codul script</label>
                     <textarea id="firebase-json-input" rows="6" placeholder='Lipește codul de configurare Firebase...' class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none" required></textarea>
                 </div>
                 <div class="flex gap-3">
-                    <button type="button" id="btn-close-modal" class="flex-1 bg-slate-100 text-slate-700 font-bold py-3 rounded-2xl text-sm cursor-pointer">Anulează</button>
+                    <button type="button" id="btn-close-modal" class="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold py-3 rounded-2xl text-sm cursor-pointer">Anulează</button>
                     <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl text-sm cursor-pointer">Activează</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- LOGICĂ -->
     <script>
         let shifts = JSON.parse(localStorage.getItem('pontaj_shifts')) || [];
         let activeCheckIn = JSON.parse(localStorage.getItem('pontaj_active')) || null;
@@ -251,17 +301,38 @@
 
         document.getElementById('manual-date').value = new Date().toISOString().split('T')[0];
 
+        // LOGICĂ DETECTARE ȘI MANAGEMENT DARK MODE (CERINȚA 3)
+        const currentTheme = localStorage.getItem('pontaj_theme') || 'light';
+        if (currentTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('theme-icon').className = "fa-solid fa-sun text-sm";
+        }
+
+        document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('pontaj_theme', 'light');
+                document.getElementById('theme-icon').className = "fa-solid fa-moon text-sm";
+                showToast("Am trecut pe modul Luminos! ☀️");
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('pontaj_theme', 'dark');
+                document.getElementById('theme-icon').className = "fa-solid fa-sun text-sm";
+                showToast("Am trecut pe modul Întunecat! 🌙");
+            }
+        });
+
         function getDeviceType() {
             const ua = navigator.userAgent;
             if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile/.test(ua)) return "Telefon 📱";
             if (/(tablet|ipad|playbook)|(android(?!.*mobi))/i.test(ua)) return "Tabletă 📟";
-            return "Calculator 💻";
+            return "PC 💻";
         }
 
         function showToast(message, isError = false) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            toast.className = `px-5 py-3 rounded-2xl shadow-xl text-xs font-bold text-white transition-all transform duration-300 ${isError ? 'bg-rose-600' : 'bg-slate-900'}`;
+            toast.className = `px-5 py-3 rounded-2xl shadow-xl text-xs font-bold text-white transition-all transform duration-300 ${isError ? 'bg-rose-600' : 'bg-slate-900 dark:bg-slate-800'}`;
             toast.innerText = message;
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 4500);
@@ -283,7 +354,7 @@
             return `${zi}.${luna}.${an} (${numeZi})`;
         }
 
-        // Ceas rapid cu remedierea erorii de variabilă (zileSaptamana)
+        // Ceas rapid complet funcțional
         setInterval(() => {
             const now = new Date();
             document.getElementById('live-clock').innerText = now.toLocaleTimeString('ro-RO');
@@ -295,18 +366,14 @@
             document.getElementById('live-date').innerText = `${zi}.${luna}.${an} - ${zileSaptamana[now.getDay()]}`;
         }, 1000);
 
+        // Management conexiune
         window.addEventListener('online', () => {
             isOnline = true;
             document.getElementById('net-badge').className = "whitespace-nowrap text-[10px] uppercase font-extrabold tracking-wider px-2.5 py-1 rounded-lg bg-emerald-500 text-white shadow-sm";
             document.getElementById('net-badge').innerText = "Online 🌐";
-            showToast("Te-ai reconectat la internet! Se sincronizează... 🔄");
-            
-            if (firebaseConfig && !db) {
-                initFirebase();
-            } else if (db && syncId) {
-                pushToCloud();
-                startLiveListening();
-            }
+            showToast("Te-ai reconectat! Datele se sincronizează... 🔄");
+            if (firebaseConfig && !db) initFirebase();
+            else if (db && syncId) { pushToCloud(); startLiveListening(); }
         });
 
         window.addEventListener('offline', () => {
@@ -315,7 +382,7 @@
             document.getElementById('net-badge').innerText = "Offline ☁️❌";
             document.getElementById('sync-status-tag').innerText = "Mod Offline Securat";
             document.getElementById('sync-status-tag').className = "text-[9px] bg-amber-500/20 text-amber-500 font-bold px-2 py-0.5 rounded-full border border-amber-500/30";
-            showToast("Mod offline! Datele sunt stocate sigur pe telefon. 🔐", true);
+            showToast("Mod offline activat local! 🔐", true);
         });
 
         function calculateDuration(start, end) {
@@ -332,6 +399,219 @@
             return `${h}h ${m}m`;
         }
 
+        // POPULARE DINAMICĂ A SELECTORULUI DE LUNI DE FILTRARE (CERINȚA 1)
+        function updateMonthFilterOptions() {
+            const filterMonthSelect = document.getElementById('filter-month');
+            const currentValue = filterMonthSelect.value;
+            
+            // Re-adăugăm opțiunea de bază
+            filterMonthSelect.innerHTML = '<option value="all">Toate lunile</option>';
+            
+            const uniqueMonths = [];
+            const luniNume = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
+            
+            shifts.forEach(s => {
+                if(s.date) {
+                    const ym = s.date.substring(0, 7); // Extrage YYYY-MM
+                    if(!uniqueMonths.includes(ym)) uniqueMonths.push(ym);
+                }
+            });
+            
+            // Sortare descrescătoare a lunilor
+            uniqueMonths.sort((a,b) => b.localeCompare(a));
+            
+            uniqueMonths.forEach(ym => {
+                const [year, month] = ym.split('-');
+                const option = document.createElement('option');
+                option.value = ym;
+                option.innerText = `${luniNume[parseInt(month)-1]} ${year}`;
+                filterMonthSelect.appendChild(option);
+            });
+            
+            // Refacem selecția dacă ea încă există
+            filterMonthSelect.value = currentValue;
+        }
+
+        // RENDER CENTRAL AL APLICAȚIEI CU FILTRARE ȘI SORTARE (CERINȚA 1)
+        function render() {
+            updateMonthFilterOptions();
+
+            if (activeCheckIn) {
+                document.getElementById('quick-check-off').classList.add('hidden');
+                document.getElementById('quick-check-on').classList.remove('hidden');
+                document.getElementById('quick-in-time').innerText = activeCheckIn.time;
+                document.getElementById('quick-in-info').innerText = `Data: ${formatRomanianDate(activeCheckIn.date)} | Sursă: ${activeCheckIn.device}`;
+            } else {
+                document.getElementById('quick-check-off').classList.remove('hidden');
+                document.getElementById('quick-check-on').classList.add('hidden');
+            }
+
+            const tbody = document.getElementById('shifts-tbody');
+            tbody.innerHTML = '';
+
+            const selectedMonth = document.getElementById('filter-month').value;
+            const sortOrder = document.getElementById('sort-order').value;
+
+            // 1. Aplicăm Filtrarea
+            let processedShifts = shifts.filter(s => {
+                if (selectedMonth === 'all') return true;
+                return s.date && s.date.startsWith(selectedMonth);
+            });
+
+            // 2. Aplicăm Sortarea
+            processedShifts.sort((a, b) => {
+                if (sortOrder === 'date-desc') {
+                    return b.date.localeCompare(a.date) || b.checkIn.localeCompare(a.checkIn);
+                } else if (sortOrder === 'date-asc') {
+                    return a.date.localeCompare(b.date) || a.checkIn.localeCompare(b.checkIn);
+                } else if (sortOrder === 'duration-desc') {
+                    return calculateDuration(b.checkIn, b.checkOut) - calculateDuration(a.checkIn, a.checkOut);
+                } else if (sortOrder === 'duration-asc') {
+                    return calculateDuration(a.checkIn, a.checkOut) - calculateDuration(b.checkIn, b.checkOut);
+                }
+                return 0;
+            });
+
+            if (processedShifts.length === 0) {
+                document.getElementById('empty-state').classList.remove('hidden');
+                document.getElementById('table-container').classList.add('hidden');
+                document.getElementById('btn-export').classList.add('hidden');
+            } else {
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('table-container').classList.remove('hidden');
+                document.getElementById('btn-export').classList.remove('hidden');
+
+                processedShifts.forEach((s) => {
+                    const dur = calculateDuration(s.checkIn, s.checkOut);
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50 dark:hover:bg-slate-900/60 transition";
+                    tr.innerHTML = `
+                        <td class="py-4 px-6 font-bold text-slate-700 dark:text-slate-300">${formatRomanianDate(s.date)}</td>
+                        <td class="py-4 px-4 text-center font-mono">
+                            <span class="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-2 py-1 rounded text-xs font-bold">${s.checkIn}</span> 
+                            ➔ 
+                            <span class="bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 px-2 py-1 rounded text-xs font-bold">${s.checkOut}</span>
+                        </td>
+                        <td class="py-4 px-4 text-center font-extrabold text-indigo-600 dark:text-indigo-400">${formatDuration(dur)}</td>
+                        <td class="py-4 px-4 hidden sm:table-cell text-slate-500 dark:text-slate-400 max-w-xs truncate">${s.notes}</td>
+                        <td class="py-4 px-4 text-center text-xs font-bold text-slate-600 dark:text-slate-400">${s.device || 'PC 💻'}</td>
+                        <td class="py-4 px-6 text-right whitespace-nowrap space-x-2">
+                            <button onclick="openEditModal('${s.id}')" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 p-1 cursor-pointer" title="Editează">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button onclick="deleteShift('${s.id}')" class="text-slate-400 hover:text-rose-600 p-1 cursor-pointer" title="Șterge">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // Calcul global bazat pe elementele filtrate curent
+            const totalH = processedShifts.reduce((acc, s) => acc + calculateDuration(s.checkIn, s.checkOut), 0);
+            document.getElementById('stat-hours').innerText = formatDuration(totalH);
+            document.getElementById('stat-days').innerText = processedShifts.length;
+            document.getElementById('stat-avg').innerText = processedShifts.length ? (totalH / processedShifts.length).toFixed(1) + 'h' : '0h';
+        }
+
+        // Ascultători evenimente pentru schimbarea filtrelor
+        document.getElementById('filter-month').addEventListener('change', render);
+        document.getElementById('sort-order').addEventListener('change', render);
+
+        // LOGICĂ MANAGEMENT MODAL EDITARE (CERINȚA 2)
+        window.openEditModal = function(id) {
+            const shift = shifts.find(s => s.id === id);
+            if (!shift) return;
+
+            document.getElementById('edit-id').value = shift.id;
+            document.getElementById('edit-date').value = shift.date;
+            document.getElementById('edit-in').value = shift.checkIn;
+            document.getElementById('edit-out').value = shift.checkOut;
+            document.getElementById('edit-notes').value = shift.notes === 'Pontat rapid ⚡' || shift.notes === 'Manual ✍️' ? '' : shift.notes;
+
+            document.getElementById('edit-modal').classList.remove('hidden');
+        };
+
+        document.getElementById('btn-close-edit').addEventListener('click', () => {
+            document.getElementById('edit-modal').classList.add('hidden');
+        });
+
+        document.getElementById('edit-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const index = shifts.findIndex(s => s.id === id);
+
+            if (index !== -1) {
+                shifts[index].date = document.getElementById('edit-date').value;
+                shifts[index].checkIn = document.getElementById('edit-in').value;
+                shifts[index].checkOut = document.getElementById('edit-out').value;
+                shifts[index].notes = document.getElementById('edit-notes').value || 'Modificat ✏️';
+                // Păstrează sursa inițială a dispozitivului dar marchează actualizarea
+                
+                pushToCloud();
+                render();
+                document.getElementById('edit-modal').classList.add('hidden');
+                showToast("Înregistrarea a fost modificată cu succes! 💾");
+            }
+        });
+
+        // Adăugări/Interacțiuni standard
+        document.getElementById('btn-quick-in').addEventListener('click', () => {
+            const now = new Date();
+            activeCheckIn = {
+                date: now.toISOString().split('T')[0],
+                time: now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }),
+                device: getDeviceType()
+            };
+            pushToCloud();
+            render();
+            showToast(isOnline ? "Te-ai pontat! Înregistrare urcată în Cloud. 🟢" : "Te-ai pontat local offline! 🔐");
+        });
+
+        document.getElementById('btn-quick-out').addEventListener('click', () => {
+            if (!activeCheckIn) return;
+            const now = new Date();
+            shifts.unshift({
+                id: Date.now().toString(),
+                date: activeCheckIn.date,
+                checkIn: activeCheckIn.time,
+                checkOut: now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }),
+                notes: 'Pontat rapid ⚡',
+                device: getDeviceType()
+            });
+            activeCheckIn = null;
+            pushToCloud();
+            render();
+            showToast(isOnline ? "Ieșire salvată în siguranță! 🔴" : "Ieșire salvată local offline! 🔐");
+        });
+
+        document.getElementById('manual-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            shifts.unshift({
+                id: Date.now().toString(),
+                date: document.getElementById('manual-date').value,
+                checkIn: document.getElementById('manual-in').value,
+                checkOut: document.getElementById('manual-out').value,
+                notes: document.getElementById('manual-notes').value || 'Manual ✍️',
+                device: getDeviceType()
+            });
+            document.getElementById('manual-notes').value = '';
+            pushToCloud();
+            render();
+            showToast("Pontaj adăugat cu succes! ✏️");
+        });
+
+        window.deleteShift = function(id) {
+            if(confirm("Ești sigur că vrei să ștergi acest pontaj?")) {
+                shifts = shifts.filter(s => s.id !== id);
+                pushToCloud();
+                render();
+                showToast("Înregistrarea a fost eliminată! 🗑️");
+            }
+        };
+
+        // Firebase Sync Core
         function initFirebase() {
             if (!firebaseConfig) return;
             try {
@@ -351,13 +631,10 @@
                 document.getElementById('display-sync-id').innerText = syncId;
                 document.getElementById('btn-cloud-setup').innerHTML = '<i class="fa-solid fa-cloud-slash"></i> Oprește Cloud';
 
-                if (isOnline) {
-                    startLiveListening();
-                } else {
-                    window.dispatchEvent(new Event('offline'));
-                }
+                if (isOnline) startLiveListening();
+                else window.dispatchEvent(new Event('offline'));
             } catch (e) {
-                showToast("Eroare script Cloud: " + e.message, true);
+                showToast("Eroare inițializare Cloud: " + e.message, true);
                 disableCloud();
             }
         }
@@ -374,7 +651,6 @@
             document.getElementById('cloud-badge').innerText = "Mod Local";
             document.getElementById('storage-indicator').innerText = "Stocare locală activă";
             document.getElementById('offline-banner').classList.remove('hidden');
-            document.getElementById('offline-text').className = "text-xs text-amber-800 font-semibold";
             document.getElementById('offline-text').innerText = "⚠️ Datele sunt salvate doar pe acest dispozitiv. Configurează Cloud-ul pentru a activa sincronizarea!";
             document.getElementById('sync-panel').classList.add('hidden');
             document.getElementById('btn-cloud-setup').innerHTML = '<i class="fa-solid fa-cloud"></i> Configurare Cloud';
@@ -383,12 +659,10 @@
 
         function startLiveListening() {
             if (!db || !syncId || !isOnline) return;
-
             document.getElementById('loading-state').classList.remove('hidden');
             
             unsubscribeCloud = db.collection('pontaje_universale').doc(syncId).onSnapshot((doc) => {
                 document.getElementById('loading-state').classList.add('hidden');
-                
                 if (!isOnline) return;
 
                 document.getElementById('sync-status-tag').innerText = "Conectat Live";
@@ -407,12 +681,10 @@
                 }
             }, (error) => {
                 document.getElementById('loading-state').classList.add('hidden');
-                document.getElementById('sync-status-tag').innerText = "Eroare Conexiune";
+                document.getElementById('sync-status-tag').innerText = "Eroare Permisiuni";
                 document.getElementById('sync-status-tag').className = "text-[9px] bg-rose-500/20 text-rose-400 font-bold px-2 py-0.5 rounded-full border border-rose-500/30";
-                
                 document.getElementById('offline-banner').classList.remove('hidden');
-                document.getElementById('offline-text').className = "text-xs text-rose-800 font-bold";
-                document.getElementById('offline-text').innerText = "🛑 EROARE PERMISIUNI CLOUD: " + error.message;
+                document.getElementById('offline-text').innerText = "🛑 EROARE CLOUD PERMISIUNI (Verifică Rules în Firebase): " + error.message;
             });
         }
 
@@ -433,105 +705,6 @@
             }
         }
 
-        function render() {
-            if (activeCheckIn) {
-                document.getElementById('quick-check-off').classList.add('hidden');
-                document.getElementById('quick-check-on').classList.remove('hidden');
-                document.getElementById('quick-in-time').innerText = activeCheckIn.time;
-                document.getElementById('quick-in-info').innerText = `Data: ${formatRomanianDate(activeCheckIn.date)} | Sursă: ${activeCheckIn.device}`;
-            } else {
-                document.getElementById('quick-check-off').classList.remove('hidden');
-                document.getElementById('quick-check-on').classList.add('hidden');
-            }
-
-            const tbody = document.getElementById('shifts-tbody');
-            tbody.innerHTML = '';
-
-            if (shifts.length === 0) {
-                document.getElementById('empty-state').classList.remove('hidden');
-                document.getElementById('table-container').classList.add('hidden');
-                document.getElementById('btn-export').classList.add('hidden');
-            } else {
-                document.getElementById('empty-state').classList.add('hidden');
-                document.getElementById('table-container').classList.remove('hidden');
-                document.getElementById('btn-export').classList.remove('hidden');
-
-                shifts.forEach((s) => {
-                    const dur = calculateDuration(s.checkIn, s.checkOut);
-                    const tr = document.createElement('tr');
-                    tr.className = "hover:bg-slate-50 transition";
-                    tr.innerHTML = `
-                        <td class="py-4 px-6 font-bold text-slate-700">${formatRomanianDate(s.date)}</td>
-                        <td class="py-4 px-4 text-center font-mono"><span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-bold">${s.checkIn}</span> ➔ <span class="bg-rose-50 text-rose-700 px-2 py-1 rounded text-xs font-bold">${s.checkOut}</span></td>
-                        <td class="py-4 px-4 text-center font-extrabold text-indigo-600">${formatDuration(dur)}</td>
-                        <td class="py-4 px-4 hidden sm:table-cell text-slate-500 max-w-xs truncate">${s.notes}</td>
-                        <td class="py-4 px-4 text-center text-xs font-bold text-slate-600">${s.device || 'PC 💻'}</td>
-                        <td class="py-4 px-6 text-right"><button onclick="deleteShift('${s.id}')" class="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"><i class="fa-solid fa-trash"></i></button></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
-
-            const totalH = shifts.reduce((acc, s) => acc + calculateDuration(s.checkIn, s.checkOut), 0);
-            document.getElementById('stat-hours').innerText = formatDuration(totalH);
-            document.getElementById('stat-days').innerText = shifts.length;
-            document.getElementById('stat-avg').innerText = shifts.length ? (totalH / shifts.length).toFixed(1) + 'h' : '0h';
-        }
-
-        document.getElementById('btn-quick-in').addEventListener('click', () => {
-            const now = new Date();
-            activeCheckIn = {
-                date: now.toISOString().split('T')[0],
-                time: now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }),
-                device: getDeviceType()
-            };
-            pushToCloud();
-            render();
-            showToast(isOnline ? "Te-ai pontat! Salvat în Cloud. 🟢" : "Te-ai pontat! Salvat local offline. 🔐");
-        });
-
-        document.getElementById('btn-quick-out').addEventListener('click', () => {
-            if (!activeCheckIn) return;
-            const now = new Date();
-            shifts.unshift({
-                id: Date.now().toString(),
-                date: activeCheckIn.date,
-                checkIn: activeCheckIn.time,
-                checkOut: now.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }),
-                notes: 'Pontat rapid ⚡',
-                device: getDeviceType()
-            });
-            activeCheckIn = null;
-            pushToCloud();
-            render();
-            showToast(isOnline ? "Ieșire salvată în Cloud! 🔴" : "Ieșire salvată local offline! 🔐");
-        });
-
-        document.getElementById('manual-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            shifts.unshift({
-                id: Date.now().toString(),
-                date: document.getElementById('manual-date').value,
-                checkIn: document.getElementById('manual-in').value,
-                checkOut: document.getElementById('manual-out').value,
-                notes: document.getElementById('manual-notes').value || 'Manual ✍️',
-                device: getDeviceType()
-            });
-            document.getElementById('manual-notes').value = '';
-            pushToCloud();
-            render();
-            showToast("Pontaj adăugat cu succes! ✏️");
-        });
-
-        window.deleteShift = function(id) {
-            if(confirm("Ștergi această înregistrare?")) {
-                shifts = shifts.filter(s => s.id !== id);
-                pushToCloud();
-                render();
-                showToast("S-a șters! 🗑️");
-            }
-        };
-
         document.getElementById('link-device-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const targetId = document.getElementById('input-sync-id').value.trim();
@@ -541,13 +714,13 @@
                 localStorage.setItem('pontaj_sync_id', targetId);
                 document.getElementById('input-sync-id').value = '';
                 initFirebase();
-                showToast("ID sincronizat! Datele se încarcă... 🔄");
+                showToast("Dispozitiv cuplat cu succes! Se încarcă... 🔄");
             }
         });
 
         document.getElementById('btn-cloud-setup').addEventListener('click', () => {
             if (firebaseConfig) {
-                if(confirm("Oprești cloud-ul?")) disableCloud();
+                if(confirm("Deconectezi cloud-ul curent?")) disableCloud();
             } else {
                 document.getElementById('cloud-modal').classList.remove('hidden');
             }
@@ -572,32 +745,24 @@
                     localStorage.setItem('pontaj_firebase_config', JSON.stringify(parsed));
                     document.getElementById('cloud-modal').classList.add('hidden');
                     initFirebase();
-                    showToast("Configurație Cloud activată! ☁️");
-                } else {
-                    throw new Error();
-                }
-            } catch(err) {
-                showToast("Cod Firebase invalid!", true);
-            }
+                    showToast("Configurația Cloud a fost pornită! ☁️");
+                } else { throw new Error(); }
+            } catch(err) { showToast("Cod configurare Firebase invalid!", true); }
         });
 
         document.getElementById('btn-copy-code').addEventListener('click', () => {
             navigator.clipboard.writeText(syncId);
-            showToast("Cod copiat pe clipboard! 📋");
+            showToast("Cod salvat în clipboard! Trimite-l pe celălalt ecran! 📋");
         });
 
         document.getElementById('btn-export').addEventListener('click', () => {
-            let csv = "\ufeffData,Intrare,Iesire,Dispozitiv,Note\n";
-            shifts.forEach(s => csv += `"${formatRomanianDate(s.date)}","${s.checkIn}","${s.checkOut}","${s.device || ''}","${s.notes}"\n`);
+            let csv = "\ufeffData,Intrare,Iesire,Durata,Dispozitiv,Note\n";
+            shifts.forEach(s => csv += `"${formatRomanianDate(s.date)}","${s.checkIn}","${s.checkOut}","${formatDuration(calculateDuration(s.checkIn, s.checkOut))}","${s.device || ''}","${s.notes}"\n`);
             const link = document.createElement("a");
             link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
             link.download = `pontaj_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
         });
-
-        if (!navigator.onLine) {
-            isOnline = false;
-        }
 
         initFirebase();
         render();
